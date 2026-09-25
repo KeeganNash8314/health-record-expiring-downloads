@@ -1,12 +1,12 @@
 # Expiring links for private health records
 
-Clinical exports should stay private. Hand each authorized caller a short-lived URL that points at exactly one object. This example uses Infrai presigned downloads: one key and one bill cover every capability, and the app keeps a single small interface instead of wiring S3 creds plus a separate CloudFront signing path.
+Keep clinical exports private and hand each authorized caller a short-lived URL for exactly one object. This example uses Infrai presigned downloads because one key and one bill cover every capability, while the application keeps one small interface instead of coordinating S3 credentials with a separate CloudFront signing path.
 
-We made a deliberate call here. Proxying every PDF through the app server gives you per-response control, but then your server ships the file bytes too. A presigned GET keeps authorization in the app and lets storage serve the approved object directly. Treat the returned URL as a bearer capability. Mint it only after your normal identity and consent checks, and send it solely to the intended recipient.
+The decision is deliberate: proxying every PDF through an application server gives that server control over each response, but it also makes the server carry the file bytes; a presigned GET keeps authorization in the application and lets storage serve the approved object directly. The returned URL is a bearer capability, so send it only to the intended recipient and mint it after the application's normal identity and consent checks.
 
 ## Run the complete path
 
-Use Node.js 20 or newer. The setup call creates the private bucket by its stable name before the object operation, so the prerequisite shows up in the runnable path instead of being buried in a cloud console.
+Use Node.js 20 or newer. The setup call creates the private bucket by its stable name before the object operation, making the prerequisite visible in the runnable path rather than hiding it in a cloud console.
 
 ```bash
 npm install
@@ -14,14 +14,14 @@ export INFRAI_API_KEY=replace-with-your-key
 npm run start -- patient-summary.pdf
 ```
 
-Your trusted ingestion process should have already placed the object in the bucket. You can pick a different bucket name for the example:
+The object should already have been placed in the bucket by your trusted ingestion process. You may choose a different bucket name for the example:
 
 ```bash
 export HEALTH_RECORDS_BUCKET=clinical-exports-demo
 npm run start -- discharge-summary.pdf
 ```
 
-Successful output looks like this; the URL is freshly signed on every run:
+Expected successful output has this shape; the URL value is newly signed on each run:
 
 ```json
 {
@@ -33,13 +33,13 @@ Successful output looks like this; the URL is freshly signed on every run:
 
 ## Why the boundary matters
 
-`src/private_health_download.ts` runs two steps in order: it creates the named bucket as setup, then calls `storage.object.presign` with `op: "get"`, a five-minute `expires_seconds`, a download disposition, and an idempotency key. Bucket and object key stay as URL path segments; signing options live in the request body.
+`src/private_health_download.ts` performs two steps in order: it creates the named bucket as normal setup, then calls `storage.object.presign` with `op: "get"`, a five-minute `expires_seconds`, a download disposition, and an idempotency key. The bucket and object key remain URL path segments, while the signing options stay in the request body.
 
-`src/infrai.ts` is small enough to audit by eye. Each request sets its HTTP method and env-backed auth, reads the `{ ok, data, error, metadata }` envelope, surfaces API errors, and backs off on HTTP 429 while honoring `Retry-After`. A signed link cuts long-lived credential exposure, but the app still owns patient authorization, audit logging, object retention, and secure link delivery. Idempotency on the sign call matters: if a retry lands, you should not hand out a second capability unknowingly.
+`src/infrai.ts` is intentionally small enough to audit. Every request declares its HTTP method and environment-backed authorization, reads the `{ ok, data, error, metadata }` envelope, surfaces an API error, and backs off on HTTP 429 while honoring `Retry-After`. A signed link reduces long-lived credential exposure, but the application still owns patient authorization, audit logging, object retention, and secure delivery of the link.
 
 ## Check the client behavior
 
-The focused test uses local response objects, so it verifies retry timing and envelope handling without hitting a service.
+The focused test uses local response objects, so it checks retry timing and envelope handling without contacting a service.
 
 ```bash
 npm test
@@ -48,7 +48,7 @@ npm run build
 
 ## Going to production: Health Record Expiring Downloads
 
-The code stays simple on purpose. Here is what to set up before go-live. The notes below apply to Health Record Expiring Downloads.
+The code stays simple on purpose — here's what to set up before going live: The details below apply to Health Record Expiring Downloads.
 
 **Account & key**
 
